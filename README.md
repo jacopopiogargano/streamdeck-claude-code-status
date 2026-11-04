@@ -27,7 +27,7 @@ Each key also shows the model (O / S / H), the effort level, and how full the co
 
 ## Requirements
 
-- macOS 12+, Stream Deck app 6.5+
+- macOS 12+, Stream Deck app 6.9+
 - iTerm2
 - `/usr/bin/python3` (run `xcode-select --install` if it is missing)
 
@@ -46,7 +46,7 @@ All in the key's settings panel:
 
 ## How it works
 
-- `bin/hook.py` is a Claude Code hook. The installer copies it to `~/.claude/session-status/hook.py`, and it writes one small JSON file per iTerm2 session to `~/.claude/session-status/`.
+- `src/hook.py` is a Claude Code hook (shipped inside `bin/hook-src.js`; run `node tools/embed-hook.js` after editing it). The installer writes it to `~/.claude/session-status/hook.py`, and it writes one small JSON file per iTerm2 session to `~/.claude/session-status/`.
   - The hook command ends in `|| true`, so it never blocks Claude Code, even if the plugin is uninstalled.
   - Nothing leaves your machine, except the optional Haiku check, which goes through your own `claude` CLI.
 - `bin/plugin.js` lists iTerm2 sessions via AppleScript, reads those files, and draws the keys.

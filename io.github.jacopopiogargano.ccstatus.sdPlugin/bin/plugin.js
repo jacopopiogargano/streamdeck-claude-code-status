@@ -1,6 +1,6 @@
 // Session Status for Claude Code — Stream Deck plugin.
 // One key per iTerm2 session running Claude Code, coloured by what that session needs from you.
-// State comes from ~/.claude/session-status/<iTerm session id>.json, written by the bundled hook (bin/hook.py).
+// State comes from ~/.claude/session-status/<iTerm session id>.json, written by the bundled hook (src/hook.py, shipped inside bin/hook-src.js).
 "use strict";
 
 // Node 20 only exposes WebSocket behind a flag: relaunch ourselves with it.

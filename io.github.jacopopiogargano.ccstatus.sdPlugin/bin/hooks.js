@@ -1,5 +1,5 @@
 // Installs / removes the Claude Code hook that feeds the plugin.
-// The hook script is copied to ~/.claude/session-status/hook.py (outside the plugin folder), so uninstalling
+// The hook script (embedded in hook-src.js, generated from src/hook.py) is written to ~/.claude/session-status/hook.py (outside the plugin folder), so uninstalling
 // the plugin never leaves Claude Code pointing at a missing file; the command also ends in `|| true`.
 // Usable from the command line for testing:  node hooks.js status|preview|install|remove [--settings <file>]
 "use strict";
@@ -10,7 +10,7 @@ const path = require("path");
 const HOME = os.homedir();
 const STATUS_DIR = path.join(HOME, ".claude", "session-status");
 const HOOK_DEST = path.join(STATUS_DIR, "hook.py");
-const HOOK_SRC = path.join(__dirname, "hook.py");
+const HOOK_TEXT = require("./hook-src.js");  // shipped files are DRM-encrypted, so the hook travels as a JS string
 let SETTINGS = path.join(HOME, ".claude", "settings.json");
 const MARK = "session-status/hook.py";           // identifies our entries
 const EVENTS = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
@@ -68,7 +68,7 @@ function writeSettings(s) {
 
 function copyHook() {
   fs.mkdirSync(STATUS_DIR, { recursive: true });
-  fs.copyFileSync(HOOK_SRC, HOOK_DEST);
+  fs.writeFileSync(HOOK_DEST, HOOK_TEXT);
   fs.chmodSync(HOOK_DEST, 0o755);
 }
 
@@ -104,7 +104,7 @@ function remove() {
 // called at plugin start: update the copied hook if it is installed and the plugin shipped a newer one
 function refreshHookCopy() {
   try {
-    if (fs.existsSync(HOOK_DEST) && fs.readFileSync(HOOK_DEST, "utf8") !== fs.readFileSync(HOOK_SRC, "utf8")) copyHook();
+    if (fs.existsSync(HOOK_DEST) && fs.readFileSync(HOOK_DEST, "utf8") !== HOOK_TEXT) copyHook();
   } catch {}
 }
 
