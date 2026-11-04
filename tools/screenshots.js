@@ -117,6 +117,30 @@ page("5-settings", `
   Removing it is one click too.</p></div>
   <div class="deck" style="padding:22px"><iframe src="pi.html" style="width:520px;height:820px;border:0;border-radius:18px;background:#2d2d2d"></iframe></div>`);
 
+// Marketplace icon (288x288): a 2x2 mini deck with real keys. Rendered at 2x, then scaled down for crisp text.
+P.setCfg({});
+const iconKeys = [
+  key(S("api", "waiting", { kind: "ask", effort: "high", ctx_pct: 42, model: "opus" })),
+  key(S("web", "waiting", { kind: "perm", effort: "medium", ctx_pct: 18, model: "sonnet" })),
+  key(S("billing", "done", { effort: "xhigh", ctx_pct: 63, model: "opus" })),
+  working(S("ios", "working", { effort: "max", ctx_pct: 88, model: "opus" }), 9),
+];
+fs.writeFileSync(path.join(TMP, "icon.html"), `<!doctype html><meta charset="utf-8"><style>
+  * { margin: 0; box-sizing: border-box; } html, body { width: 288px; height: 288px; background: transparent; }
+  .deck { width: 288px; height: 288px; border-radius: 52px; background: linear-gradient(#26272b, #141517);
+          padding: 16px; display: grid; grid-template-columns: 122px 122px; gap: 12px; }
+  .k { width: 122px; height: 122px; border-radius: 20px; overflow: hidden; background: #000; }
+  .k svg { width: 122px; height: 122px; display: block; }
+</style><body><div class="deck">${iconKeys.map((x) => `<div class="k">${x.replace("<svg ", '<svg viewBox="0 0 144 144" ')}</div>`).join("")}</div></body>`);
+const MKT = path.join(ROOT, "marketplace");
+fs.mkdirSync(MKT, { recursive: true });
+const icon2x = path.join(TMP, "icon@2x.png");
+execFileSync(CHROME, ["--headless=new", `--user-data-dir=${path.join(TMP, "chrome")}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars",
+  "--force-device-scale-factor=2", "--default-background-color=00000000", "--window-size=288,288", `--screenshot=${icon2x}`, "file://" + path.join(TMP, "icon.html")],
+  { stdio: "ignore", timeout: 60000 });
+execFileSync("/usr/bin/sips", ["-z", "288", "288", icon2x, "--out", path.join(MKT, "icon-288.png")], { stdio: "ignore" });
+console.log("wrote marketplace/icon-288.png");
+
 for (const f of fs.readdirSync(TMP).filter((f) => /^\d.*\.html$/.test(f))) {
   const png = path.join(OUT, f.replace(".html", ".png"));
   execFileSync(CHROME, ["--headless=new", `--user-data-dir=${path.join(TMP, "chrome")}`, "--no-first-run", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
