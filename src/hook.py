@@ -217,6 +217,31 @@ def claude_process():
     return None, "", False
 
 
+def in_iterm_tab():
+    """True if the claude that fired this hook runs in the iTerm tab itself: its tty is the tty of the iTerm
+    login shell above it. An app started from the tab (which then runs claude in its own pty) inherits
+    ITERM_SESSION_ID but must not take over or delete that tab's status."""
+    pid, claude_tty = os.getppid(), None
+    for _ in range(12):
+        try:
+            out = subprocess.run(["/bin/ps", "-o", "ppid=,tty=,command=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+        except Exception:
+            return True
+        parts = out.split(None, 2)
+        if len(parts) < 3:
+            return False
+        ppid, tty, cmd = parts
+        exe = os.path.basename(cmd.split()[0])
+        if claude_tty is None and (exe == "claude" or (exe == "node" and "claude" in cmd)):
+            claude_tty = tty
+        if exe == "login" and "iTerm" in cmd:
+            return claude_tty is None or claude_tty == tty
+        if ppid in ("0", "1"):
+            return False
+        pid = int(ppid)
+    return False
+
+
 def terminal_info():
     """Which terminal app this session runs in, so the plugin can jump back to it."""
     env = os.environ
@@ -241,6 +266,8 @@ try:
     # one file per terminal session: iTerm2 has a stable session id; elsewhere use Claude's own session id
     iterm = os.environ.get("ITERM_SESSION_ID", "")  # e.g. "w0t1p0:6A1B2C3D-..."
     if iterm:
+        if not in_iterm_tab():
+            sys.exit(0)   # claude started by an app launched from this tab, not the tab itself
         sid = iterm.split(":")[-1]
     elif data.get("session_id"):
         sid = "cc-" + data["session_id"]
@@ -253,8 +280,13 @@ try:
     cwd = data.get("cwd") or os.getcwd()
 
     if event == "SessionEnd":
-        if os.path.exists(path):
-            os.remove(path)
+        try:   # only the session that owns the file may remove it
+            with open(path) as f:
+                owner = json.load(f).get("session") or ""
+            if not owner or owner == (data.get("session_id") or "")[:8]:
+                os.remove(path)
+        except Exception:
+            pass
         sys.exit(0)
 
     if event == "Stop":
