@@ -51,6 +51,8 @@ All in the key's settings panel:
   - Nothing leaves your machine, except the optional Haiku check, which goes through your own `claude` CLI.
 - `bin/plugin.js` lists iTerm2 sessions via AppleScript, reads those files, and draws the keys.
 
+See [PRIVACY.md](PRIVACY.md) for exactly what the plugin reads and writes.
+
 ## Development
 
 ```sh
