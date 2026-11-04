@@ -1,0 +1,51 @@
+# Push a tag like v1.3.0 -> builds the .streamDeckPlugin and attaches it to the GitHub release for that tag
+# (creates the release with generated notes if it does not exist yet). The Marketplace upload stays manual.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN: io.github.jacopopiogargano.ccstatus.sdPlugin
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tag matches manifest version
+        run: |
+          v=$(node -p "require('./$PLUGIN/manifest.json').Version")
+          [ "v${v%.0}" = "$TAG" ] || { echo "::error::manifest Version $v does not match tag $TAG (expected ${TAG#v}.0)"; exit 1; }
+
+      - name: Embedded hook is up to date
+        run: |
+          node tools/embed-hook.js
+          git diff --exit-code -- "$PLUGIN/bin/hook-src.js" || { echo "::error::run 'node tools/embed-hook.js' and commit"; exit 1; }
+
+      - name: Syntax check
+        run: for f in $PLUGIN/bin/*.js; do node --check "$f"; done
+
+      - name: Validate and pack
+        run: |
+          npx --yes @elgato/cli@1.10.4 validate "$PLUGIN"
+          npx --yes @elgato/cli@1.10.4 pack "$PLUGIN" -o dist --force
+
+      - name: Publish release asset
+        run: |
+          f=dist/$(basename "$PLUGIN" .sdPlugin).streamDeckPlugin
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$f" --clobber
+          else
+            gh release create "$TAG" "$f" --title "$TAG" --generate-notes
+          fi

@@ -74,6 +74,16 @@ node tools/make-icons.js io.github.jacopopiogargano.ccstatus.sdPlugin
 node io.github.jacopopiogargano.ccstatus.sdPlugin/bin/hooks.js status --settings /path/to/test-settings.json
 ```
 
+### Releasing
+
+Bump `Version` in `manifest.json` (e.g. `1.3.0.0`), commit, then push a matching tag:
+
+```sh
+git tag v1.3.0 && git push origin v1.3.0
+```
+
+The `Release` workflow checks the tag matches the manifest and the embedded hook is current, validates and packs the plugin, and attaches the `.streamDeckPlugin` to the GitHub release (creating it with generated notes if needed). Upload the same file to the Elgato Marketplace by hand.
+
 ## Disclaimer
 
 This is an independent project. It is not made by, affiliated with, or endorsed by Anthropic. "Claude" and "Claude Code" are trademarks of Anthropic.
