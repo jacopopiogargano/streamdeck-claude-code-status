@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Session Status for Claude Code</title>
+<style>
+  :root { --bg: #2d2d2d; --fg: #d8d8d8; --dim: #969696; --field: #3d3d3d; --line: #444; --accent: #0a84ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 4px 12px 16px; background: var(--bg); color: var(--fg);
+         font: 9pt -apple-system, "Helvetica Neue", sans-serif; -webkit-user-select: none; }
+  h2 { font-size: 9pt; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .04em;
+       margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+  h2:first-of-type { border-top: 0; margin-top: 4px; }
+  .row { display: flex; align-items: center; min-height: 26px; gap: 8px; }
+  .row > label:first-child { flex: 0 0 96px; color: var(--dim); text-align: right; }
+  .row > .ctl { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  select, input[type=number], button { background: var(--field); color: var(--fg); border: 0; border-radius: 3px;
+       font: inherit; height: 22px; padding: 0 6px; }
+  select { flex: 1; min-width: 0; }
+  input[type=number] { width: 56px; }
+  input[type=color] { width: 30px; height: 20px; border: 0; padding: 0; background: none; }
+  .swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 10px; }
+  .swatches label { display: flex; align-items: center; gap: 6px; }
+  .hint { color: var(--dim); font-size: 8pt; margin: 2px 0 4px 104px; line-height: 1.35; }
+  button { cursor: pointer; padding: 0 10px; }
+  button.primary { background: var(--accent); color: #fff; }
+  pre { background: #1e1e1e; color: #cfcfcf; padding: 6px; border-radius: 3px; font: 8pt Menlo, monospace;
+        max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  .ok { color: #6ccb7a; } .warn { color: #f0a050; } .bad { color: #eb6b6b; }
+  #preview { display: none; }
+</style>
+</head>
+<body>
+
+<h2>This key</h2>
+<div class="row"><label for="slot">Position</label><div class="ctl"><input id="slot" type="number" min="1" max="64" value="1"></div></div>
+<div class="hint">1 = first session, 2 = second… Give each session key on the page its own number.</div>
+
+<h2>Setup</h2>
+<div class="row"><label>Claude Code hook</label><div class="ctl"><span id="hookState">checking…</span></div></div>
+<div class="row"><label></label><div class="ctl">
+  <button id="btnPreview">Install hook…</button><button id="btnRemove">Remove hook</button></div></div>
+<div id="preview">
+  <div class="hint" style="margin-left:0">This adds the entries below to <b id="pvPath"></b> (a backup is saved first)
+    and copies the hook script to <span id="pvHook"></span>.</div>
+  <pre id="pvSnippet"></pre>
+  <div class="row"><label></label><div class="ctl"><button class="primary" id="btnInstall">Confirm install</button><button id="btnCancel">Cancel</button></div></div>
+</div>
+<div class="hint" id="hookMsg" style="margin-left:0"></div>
+
+<h2>Sessions</h2>
+<div class="row"><label for="sort">Order</label><div class="ctl"><select id="sort">
+  <option value="start">Started — oldest first</option>
+  <option value="newest">Started — newest first</option>
+  <option value="tab">iTerm window / tab order</option>
+  <option value="urgency">Needs you first</option>
+  <option value="activity">Most recently active</option>
+  <option value="name">Name A–Z</option>
+</select></div></div>
+<div class="row"><label for="label">Key title</label><div class="ctl"><select id="label">
+  <option value="name">Session / tab name</option><option value="folder">Project folder</option>
+</select></div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="onlyClaude"> Only terminals running Claude Code</label></div></div>
+<div class="row"><label for="maxSessions">Show at most</label><div class="ctl"><input id="maxSessions" type="number" min="0" max="64"> sessions</div></div>
+<div class="hint">0 = one per session key. Extra keys stay blank.</div>
+<div class="row"><label for="overflow">When there are more</label><div class="ctl"><select id="overflow">
+  <option value="badge">Show “+N” on the last key</option>
+  <option value="page">Last key flips pages</option>
+  <option value="urgent">Keep the ones that need you visible</option>
+</select></div></div>
+<div class="hint">“+N!” means a hidden session is waiting on you. The page key shows a red count for the same reason.</div>
+<div class="row"><label for="empty">Empty keys</label><div class="ctl"><select id="empty">
+  <option value="walker">Little critter when nothing is open</option><option value="blank">Blank</option>
+</select></div></div>
+
+<h2>On each key</h2>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="showModel"> Model letter (O / S / H)</label></div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="showEffort"> Effort bar</label></div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="showContext"> Context bar</label></div></div>
+<div class="row"><label>Context</label><div class="ctl">amber at <input id="ctxAmber" type="number" min="1" max="100">% · pulse at <input id="ctxPulse" type="number" min="1" max="100">%</div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="breathe"> Waiting keys breathe</label></div></div>
+<div class="row"><label for="working">Working</label><div class="ctl"><select id="working">
+  <option value="spark">Spinner</option><option value="solid">Still spinner</option>
+</select></div></div>
+
+<h2>Colours</h2>
+<div class="swatches">
+  <label><input type="color" id="cWaiting"> Asks you something</label>
+  <label><input type="color" id="cPerm"> Wants permission</label>
+  <label><input type="color" id="cDone"> Done — check it</label>
+  <label><input type="color" id="cIdle"> Idle</label>
+  <label><input type="color" id="cWorking"> Working background</label>
+  <label><input type="color" id="cSpark"> Accent</label>
+  <label><input type="color" id="cText"> Text</label>
+</div>
+<div class="hint" style="margin-left:0;margin-top:8px">Effort bar</div>
+<div class="swatches">
+  <label><input type="color" id="eLow"> low</label>
+  <label><input type="color" id="eMedium"> medium</label>
+  <label><input type="color" id="eHigh"> high</label>
+  <label><input type="color" id="eXhigh"> xhigh</label>
+  <label><input type="color" id="eMax"> max</label>
+  <label><input type="checkbox" id="maxRainbow"> rainbow on max</label>
+</div>
+
+<h2>Smart status</h2>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="haiku"> Ask Haiku whether a finished reply needs you</label></div></div>
+<div class="hint">Off: a quick keyword check decides between “asks you”, “done — check it” and idle.
+  On: also runs <code>claude -p --model haiku</code> after each reply, which uses your Claude plan.</div>
+
+<h2></h2>
+<div class="row"><label></label><div class="ctl"><button id="btnReset">Reset all to defaults</button></div></div>
+
+<script>
+const DEFAULTS = {
+  sort: "start", onlyClaude: true, label: "name", maxSessions: 0, overflow: "badge",
+  showModel: true, showEffort: true, showContext: true, ctxAmber: 70, ctxPulse: 85, breathe: true,
+  working: "spark", empty: "walker",
+  cWaiting: "#D93025", cPerm: "#E8710A", cDone: "#0A2C14", cIdle: "#000000", cWorking: "#000000",
+  cSpark: "#D97757", cText: "#FFFFFF",
+  eLow: "#F5C518", eMedium: "#4EBA65", eHigh: "#B1B9F9", eXhigh: "#AF87FF", eMax: "#FF8A65", maxRainbow: true,
+  haiku: false,
+};
+let ws, uuid, action, global = { ...DEFAULTS }, settings = {};
+const $ = (id) => document.getElementById(id);
+const sendWS = (o) => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+const toPlugin = (payload) => sendWS({ event: "sendToPlugin", action, context: uuid, payload });
+
+function fill() {
+  for (const [k, def] of Object.entries(DEFAULTS)) {
+    const el = $(k); if (!el) continue;
+    const v = global[k] ?? def;
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+  }
+  $("slot").value = settings.slot || 1;
+}
+function saveGlobal() {
+  for (const k of Object.keys(DEFAULTS)) {
+    const el = $(k); if (!el) continue;
+    global[k] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
+  }
+  sendWS({ event: "setGlobalSettings", context: uuid, payload: global });
+  toPlugin({ type: "setGlobal", settings: global });
+}
+for (const k of Object.keys(DEFAULTS)) { const el = $(k); if (el) el.addEventListener(el.type === "color" ? "input" : "change", saveGlobal); }
+$("slot").addEventListener("change", () => {
+  settings.slot = Math.max(1, Number($("slot").value) || 1);
+  sendWS({ event: "setSettings", context: uuid, payload: settings });
+});
+$("btnReset").onclick = () => { global = { ...DEFAULTS }; fill(); saveGlobal(); };
+
+function showStatus(s) {
+  const el = $("hookState");
+  if (s.error) { el.className = "bad"; el.textContent = s.error; return; }
+  if (!s.python) { el.className = "bad"; el.textContent = "python3 missing — run xcode-select --install"; return; }
+  if (s.installed) { el.className = "ok"; el.textContent = "Installed ✓"; }
+  else if (s.partial) { el.className = "warn"; el.textContent = `Partly installed (${s.events.length} events) — install again`; }
+  else { el.className = "warn"; el.textContent = "Not installed — keys stay dark until you install it"; }
+}
+$("btnPreview").onclick = () => toPlugin({ type: "hookPreview" });
+$("btnInstall").onclick = () => { $("preview").style.display = "none"; toPlugin({ type: "hookInstall" }); };
+$("btnCancel").onclick = () => { $("preview").style.display = "none"; };
+$("btnRemove").onclick = () => toPlugin({ type: "hookRemove" });
+
+function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, info, actionInfo) {
+  uuid = inUUID;
+  const a = JSON.parse(actionInfo || "{}");
+  action = a.action; settings = a.payload?.settings || {};
+  ws = new WebSocket("ws://127.0.0.1:" + port);
+  ws.onopen = () => {
+    sendWS({ event: registerEvent, uuid });
+    sendWS({ event: "getGlobalSettings", context: uuid });
+    toPlugin({ type: "hookStatus" });
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.event === "didReceiveGlobalSettings") { global = { ...DEFAULTS, ...(m.payload?.settings || {}) }; fill(); }
+    else if (m.event === "didReceiveSettings") { settings = m.payload?.settings || {}; fill(); }
+    else if (m.event === "sendToPropertyInspector") {
+      const p = m.payload || {};
+      if (p.type === "hookStatus") showStatus(p);
+      else if (p.type === "hookPreview") {
+        if (!p.add.length) { $("hookMsg").textContent = "Already installed."; return; }
+        $("pvPath").textContent = p.settingsPath; $("pvHook").textContent = p.hookPath;
+        $("pvSnippet").textContent = p.snippet; $("preview").style.display = "block"; $("hookMsg").textContent = "";
+      } else if (p.type === "hookResult") {
+        $("hookMsg").className = p.ok ? "hint" : "hint bad"; $("hookMsg").textContent = p.message;
+        if (p.status) showStatus(p.status);
+      }
+    }
+  };
+  fill();
+}
+</script>
+</body>
+</html>
