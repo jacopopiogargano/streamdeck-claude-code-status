@@ -45,6 +45,8 @@ const DEFAULTS = {
   eLow: "#F5C518", eMedium: "#4EBA65", eHigh: "#B1B9F9", eXhigh: "#AF87FF", eMax: "#FF8A65", maxRainbow: true,
   // smart classification of finished turns (uses the user's own Claude account via `claude -p --model haiku`)
   haiku: false,
+  // sounds when a session starts needing you (macOS system sounds, "none" = silent)
+  sounds: true, volume: 0.35, sAsk: "Glass", sPerm: "Tink", sDone: "Purr", quietFocused: true,
 };
 let cfg = { ...DEFAULTS };
 
@@ -100,6 +102,7 @@ function onInspector(m) {
   const p = m.payload || {};
   try {
     if (p.type === "setGlobal") applyGlobal(p.settings);
+    else if (p.type === "testSound") playSound(p.name, p.volume);
     else if (p.type === "hookStatus") reply({ type: "hookStatus", ...hooks.status() });
     else if (p.type === "hookPreview") reply({ type: "hookPreview", ...hooks.preview() });
     else if (p.type === "hookInstall") reply({ type: "hookResult", ...hooks.install(), status: hooks.status() });
@@ -442,8 +445,45 @@ function render() {
   }
 }
 
+// ---------------------------------------------------------------- sounds
+// A gentle macOS system sound when a session starts needing you: a question, a permission prompt, or finished
+// work to check. Never on first sight (plugin start), at most one sound every 1.5 s, and after a reply it waits
+// for the Haiku verdict (if on) so a key that flips from green to red only chimes once.
+const SOUND_DIR = "/System/Library/Sounds";
+const soundSeen = new Map(), soundPending = new Map();
+let lastSoundAt = 0;
+const soundKind = (st) => !st ? "none" : st.state === "waiting" ? (st.kind === "perm" ? "perm" : "ask") : st.state;
+function playSound(name, volume) {
+  if (!name || name === "none" || !/^[A-Za-z]+$/.test(name)) return;
+  execFile("/usr/bin/afplay", ["-v", String(Math.max(0, Math.min(1, Number(volume) || 0.3))), path.join(SOUND_DIR, name + ".aiff")], () => {});
+}
+function soundTick(list, o) {   // o: {enabled, volume, ask, perm, done, quietFocused, haiku}
+  const now = Date.now(), ids = new Set();
+  for (const s of list) {
+    ids.add(s.id);
+    const st = readStatus(s), k = soundKind(st), prev = soundSeen.get(s.id);
+    soundSeen.set(s.id, k);
+    if (prev === undefined) continue;
+    if (k !== prev) {
+      soundPending.delete(s.id);
+      if (k === "ask" || k === "perm" || k === "done") soundPending.set(s.id, { kind: k, since: now });
+    }
+    const p = soundPending.get(s.id);
+    if (!p) continue;
+    const settled = !o.haiku || st?.event !== "Stop" || st?.judged !== "heuristic";
+    if (!(settled && now - p.since >= 1200) && now - p.since < 12000) continue;
+    soundPending.delete(s.id);
+    if (!o.enabled || (o.quietFocused && s.focused) || now - lastSoundAt < 1500) continue;
+    lastSoundAt = now;
+    playSound(o[p.kind], o.volume);
+  }
+  for (const id of [...soundSeen.keys()]) if (!ids.has(id)) { soundSeen.delete(id); soundPending.delete(id); }
+}
+
 async function tick() {
   sessions = sortSessions(await listSessions());
+  soundTick(sessions, { enabled: cfg.sounds, volume: cfg.volume, ask: cfg.sAsk, perm: cfg.sPerm, done: cfg.sDone,
+    quietFocused: cfg.quietFocused, haiku: cfg.haiku });
   render();
   setTimeout(tick, POLL_MS);
 }

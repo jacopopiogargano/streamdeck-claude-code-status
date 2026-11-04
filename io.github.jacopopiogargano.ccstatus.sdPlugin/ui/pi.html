@@ -103,6 +103,15 @@
   <label><input type="checkbox" id="maxRainbow"> rainbow on max</label>
 </div>
 
+<h2>Sounds</h2>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="sounds"> Play a sound when a session needs you</label></div></div>
+<div class="row"><label for="volume">Volume</label><div class="ctl"><input id="volume" type="range" min="0.05" max="1" step="0.05"></div></div>
+<div class="row"><label for="sAsk">Asks you</label><div class="ctl"><select id="sAsk"><option value="Glass">Glass</option><option value="Tink">Tink</option><option value="Pop">Pop</option><option value="Purr">Purr</option><option value="Bottle">Bottle</option><option value="Ping">Ping</option><option value="Morse">Morse</option><option value="Blow">Blow</option><option value="Hero">Hero</option><option value="Submarine">Submarine</option><option value="Frog">Frog</option><option value="Funk">Funk</option><option value="Sosumi">Sosumi</option><option value="Basso">Basso</option><option value="none">None</option></select></div></div>
+<div class="row"><label for="sPerm">Permission</label><div class="ctl"><select id="sPerm"><option value="Glass">Glass</option><option value="Tink">Tink</option><option value="Pop">Pop</option><option value="Purr">Purr</option><option value="Bottle">Bottle</option><option value="Ping">Ping</option><option value="Morse">Morse</option><option value="Blow">Blow</option><option value="Hero">Hero</option><option value="Submarine">Submarine</option><option value="Frog">Frog</option><option value="Funk">Funk</option><option value="Sosumi">Sosumi</option><option value="Basso">Basso</option><option value="none">None</option></select></div></div>
+<div class="row"><label for="sDone">Done — check it</label><div class="ctl"><select id="sDone"><option value="Glass">Glass</option><option value="Tink">Tink</option><option value="Pop">Pop</option><option value="Purr">Purr</option><option value="Bottle">Bottle</option><option value="Ping">Ping</option><option value="Morse">Morse</option><option value="Blow">Blow</option><option value="Hero">Hero</option><option value="Submarine">Submarine</option><option value="Frog">Frog</option><option value="Funk">Funk</option><option value="Sosumi">Sosumi</option><option value="Basso">Basso</option><option value="none">None</option></select></div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="quietFocused"> Silent for the session you are looking at</label></div></div>
+<div class="hint">Picking a sound or moving the volume plays it once.</div>
+
 <h2>Smart status</h2>
 <div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="haiku"> Ask Haiku whether a finished reply needs you</label></div></div>
 <div class="hint">Off: a quick keyword check decides between “asks you”, “done — check it” and idle.
@@ -120,6 +129,7 @@ const DEFAULTS = {
   cSpark: "#D97757", cText: "#FFFFFF",
   eLow: "#F5C518", eMedium: "#4EBA65", eHigh: "#B1B9F9", eXhigh: "#AF87FF", eMax: "#FF8A65", maxRainbow: true,
   haiku: false,
+  sounds: true, volume: 0.35, sAsk: "Glass", sPerm: "Tink", sDone: "Purr", quietFocused: true,
 };
 let ws, uuid, action, global = { ...DEFAULTS }, settings = {};
 const $ = (id) => document.getElementById(id);
@@ -137,7 +147,7 @@ function fill() {
 function saveGlobal() {
   for (const k of Object.keys(DEFAULTS)) {
     const el = $(k); if (!el) continue;
-    global[k] = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
+    global[k] = el.type === "checkbox" ? el.checked : (el.type === "number" || el.type === "range") ? Number(el.value) : el.value;
   }
   sendWS({ event: "setGlobalSettings", context: uuid, payload: global });
   toPlugin({ type: "setGlobal", settings: global });
@@ -147,6 +157,8 @@ $("slot").addEventListener("change", () => {
   settings.slot = Math.max(1, Number($("slot").value) || 1);
   sendWS({ event: "setSettings", context: uuid, payload: settings });
 });
+for (const k of ["sAsk", "sPerm", "sDone", "volume"]) $(k).addEventListener("change", () =>
+  toPlugin({ type: "testSound", name: k === "volume" ? $("sAsk").value : $(k).value, volume: Number($("volume").value) }));
 $("btnReset").onclick = () => { global = { ...DEFAULTS }; fill(); saveGlobal(); };
 
 function showStatus(s) {
