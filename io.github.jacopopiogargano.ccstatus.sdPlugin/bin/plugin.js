@@ -446,39 +446,41 @@ function render() {
 }
 
 // ---------------------------------------------------------------- sounds
-// A gentle macOS system sound when a session starts needing you: a question, a permission prompt, or finished
-// work to check. Never on first sight (plugin start), at most one sound every 1.5 s, and after a reply it waits
-// for the Haiku verdict (if on) so a key that flips from green to red only chimes once.
+// A gentle macOS system sound the moment a session needs you: when Claude ends its turn, asks a question, or
+// wants a permission. It reacts to the hook's status files as they change (no polling delay) and does not wait
+// for the Smart status verdict, which only recolours the key afterwards. Never on plugin start, at most one
+// sound every 1.5 s.
 const SOUND_DIR = "/System/Library/Sounds";
-const soundSeen = new Map(), soundPending = new Map();
-let lastSoundAt = 0;
+const soundSeen = new Map();   // session id -> { k: state kind, stop: ts of the last turn end we chimed for }
+let lastSoundAt = 0, soundList = [], soundO = null;
 const soundKind = (st) => !st ? "none" : st.state === "waiting" ? (st.kind === "perm" ? "perm" : "ask") : st.state;
 function playSound(name, volume) {
   if (!name || name === "none" || !/^[A-Za-z]+$/.test(name)) return;
   execFile("/usr/bin/afplay", ["-v", String(Math.max(0, Math.min(1, Number(volume) || 0.3))), path.join(SOUND_DIR, name + ".aiff")], () => {});
 }
-function soundTick(list, o) {   // o: {enabled, volume, ask, perm, done, quietFocused, haiku}
+function soundTick(list, o) {   // o: {enabled, volume, ask, perm, done, quietFocused}
+  soundList = list; soundO = o;
   const now = Date.now(), ids = new Set();
   for (const s of list) {
     ids.add(s.id);
     const st = readStatus(s), k = soundKind(st), prev = soundSeen.get(s.id);
-    soundSeen.set(s.id, k);
-    if (prev === undefined) continue;
-    if (k !== prev) {
-      soundPending.delete(s.id);
-      if (k === "ask" || k === "perm" || k === "done") soundPending.set(s.id, { kind: k, since: now });
-    }
-    const p = soundPending.get(s.id);
-    if (!p) continue;
-    const settled = !o.haiku || st?.event !== "Stop" || st?.judged !== "heuristic";
-    if (!(settled && now - p.since >= 1200) && now - p.since < 12000) continue;
-    soundPending.delete(s.id);
-    if (!o.enabled || (o.quietFocused && s.focused) || now - lastSoundAt < 1500) continue;
+    const stop = st && st.event === "Stop" ? st.ts : prev?.stop;
+    soundSeen.set(s.id, { k, stop });
+    if (!prev) continue;                                   // first sight: no sound
+    let kind = null;
+    if (st && st.event === "Stop" && st.ts !== prev.stop) kind = k === "ask" ? "ask" : "done";   // turn just ended
+    else if (k !== prev.k && (k === "ask" || k === "perm") && st?.event !== "Stop") kind = k;   // question / permission mid-turn
+    if (!kind || !o.enabled || (o.quietFocused && s.focused) || now - lastSoundAt < 1500) continue;
     lastSoundAt = now;
-    playSound(o[p.kind], o.volume);
+    playSound(o[kind], o.volume);
   }
-  for (const id of [...soundSeen.keys()]) if (!ids.has(id)) { soundSeen.delete(id); soundPending.delete(id); }
+  for (const id of [...soundSeen.keys()]) if (!ids.has(id)) soundSeen.delete(id);
 }
+// react as soon as the hook writes a status file
+try {
+  let t = null;
+  fs.watch(STATUS_DIR, () => { clearTimeout(t); t = setTimeout(() => soundO && soundTick(soundList, soundO), 120); });
+} catch {}
 
 async function tick() {
   sessions = sortSessions(await listSessions());
