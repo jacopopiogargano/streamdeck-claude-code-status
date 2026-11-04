@@ -6,9 +6,9 @@ Session Status for Claude Code is a Stream Deck plugin. It does not collect, sen
 
 ## What the plugin reads and writes, all on your Mac
 
-- **Claude Code hook events.** A small hook (`~/.claude/session-status/hook.py`) receives session events from Claude Code. It writes one small status file per iTerm2 session to `~/.claude/session-status/`. These files hold the session state (working, waiting, done, idle), the model name, the effort level, and how full the context window is.
+- **Claude Code hook events.** A small hook (`~/.claude/session-status/hook.py`) receives session events from Claude Code. It writes one small status file per session to `~/.claude/session-status/`. These files hold the session state (working, waiting, done, idle), the model name, the effort level, how full the context window is, and which terminal app, tty and process the session runs in (so a key press can jump back to it).
 - **Session transcripts.** To find the model, effort level and context usage, the hook reads the end of the local Claude Code transcript for that session. It reads them only on your Mac and never copies them anywhere else.
-- **iTerm2.** The plugin uses AppleScript to list your iTerm2 sessions and their tab titles, and to focus a session when you press its key.
+- **Your terminal.** If you use iTerm2, the plugin uses AppleScript to list its sessions and tab titles. When you press a key, it uses AppleScript (iTerm2, Terminal), `wezterm cli` (WezTerm) or `open` (other apps) to bring that session to the front.
 - **Claude Code settings.** Only when you click **Install hook…** or **Remove hook** does the plugin edit `~/.claude/settings.json`. It shows you the change first and saves a backup.
 - **Plugin settings.** Your choices (colours, order, and so on) are stored by the Stream Deck app, and also copied to `~/.claude/session-status/config.json` so the hook can read them.
 

@@ -66,7 +66,7 @@ const blank = () => `<svg xmlns="http://www.w3.org/2000/svg" width="144" height=
 P.setCfg({});
 page("1-overview", `
   <div class="copy"><h1>See every Claude Code session at a glance.</h1>
-  <p>One key per iTerm2 session. Red asks you something, orange wants a permission, green has finished work to check.
+  <p>One key per session, in any terminal. Red asks you something, orange wants a permission, green has finished work to check.
   Press a key to jump straight to that terminal.</p></div>
   ${deck(5, [key(sample.ask), key(sample.perm), key(sample.done), working(sample.work, 9), key(sample.idle),
     blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank(), blank()].map((s, i) => s))}`);

@@ -52,7 +52,7 @@
 <div class="row"><label for="sort">Order</label><div class="ctl"><select id="sort">
   <option value="start">Started — oldest first</option>
   <option value="newest">Started — newest first</option>
-  <option value="tab">iTerm window / tab order</option>
+  <option value="tab">Terminal tab order (iTerm2 first)</option>
   <option value="urgency">Needs you first</option>
   <option value="activity">Most recently active</option>
   <option value="name">Name A–Z</option>
@@ -60,7 +60,7 @@
 <div class="row"><label for="label">Key title</label><div class="ctl"><select id="label">
   <option value="name">Session / tab name</option><option value="folder">Project folder</option>
 </select></div></div>
-<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="onlyClaude"> Only terminals running Claude Code</label></div></div>
+<div class="row"><label></label><div class="ctl"><label><input type="checkbox" id="onlyClaude"> iTerm2: hide tabs not running Claude Code</label></div></div>
 <div class="row"><label for="maxSessions">Show at most</label><div class="ctl"><input id="maxSessions" type="number" min="0" max="64"> sessions</div></div>
 <div class="hint">0 = one per session key. Extra keys stay blank.</div>
 <div class="row"><label for="overflow">When there are more</label><div class="ctl"><select id="overflow">

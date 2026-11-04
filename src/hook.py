@@ -1,7 +1,7 @@
 #!/usr/bin/python3
-"""Session Status for Claude Code: hook that records this iTerm session's Claude state for the Stream Deck plugin.
+"""Session Status for Claude Code: hook that records this terminal session's Claude state for the Stream Deck plugin.
 
-Installed by the plugin to ~/.claude/session-status/hook.py. Writes ~/.claude/session-status/<iTerm session id>.json. Never blocks or fails the hook.
+Installed by the plugin to ~/.claude/session-status/hook.py. Writes ~/.claude/session-status/<iTerm session id or "cc-"+Claude session id>.json. Never blocks or fails the hook.
 On Stop, decides whether Claude's last message needs a reply ("waiting") or not ("done"):
 a quick heuristic first; if enabled in the plugin settings, a background Haiku classification refines it.
 """
@@ -194,32 +194,59 @@ def classify_later(path, text, stamp):
     os._exit(0)
 
 
-def headless_claude():
-    """True if this hook was fired by a non-interactive `claude -p` run (e.g. one an app spawned from this tab)."""
+def claude_process():
+    """(pid, tty, headless) of the claude process that fired this hook, or (None, "", False).
+    headless = a non-interactive `claude -p` run (e.g. one an app spawned from a terminal tab)."""
     pid = os.getppid()
     for _ in range(4):
         try:
-            out = subprocess.run(["/bin/ps", "-o", "ppid=,command=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
+            out = subprocess.run(["/bin/ps", "-o", "ppid=,tty=,command=", "-p", str(pid)], capture_output=True, text=True, timeout=2).stdout.strip()
         except Exception:
-            return False
+            break
         if not out:
-            return False
-        ppid, _, cmd = out.partition(" ")
+            break
+        parts = out.split(None, 2)
+        if len(parts) < 3:
+            break
+        ppid, tty, cmd = parts
         args = cmd.split()
-        if args and os.path.basename(args[0]) == "claude":
-            return "-p" in args or "--print" in args
+        exe = os.path.basename(args[0])
+        if exe == "claude" or (exe == "node" and len(args) > 1 and "claude" in args[1]):
+            return pid, ("" if tty in ("??", "-") else "/dev/" + tty), ("-p" in args or "--print" in args)
         pid = int(ppid)
-    return False
+    return None, "", False
+
+
+def terminal_info():
+    """Which terminal app this session runs in, so the plugin can jump back to it."""
+    env = os.environ
+    term = env.get("TERM_PROGRAM", "")
+    if env.get("ITERM_SESSION_ID"):
+        term = "iTerm.app"
+    elif env.get("KITTY_WINDOW_ID"):
+        term = "kitty"
+    info = {"term": term, "app": env.get("__CFBundleIdentifier", "")}
+    if env.get("WEZTERM_PANE"):
+        info["pane"] = env["WEZTERM_PANE"]
+    if env.get("TMUX"):
+        info["tmux"] = True
+    return info
 
 
 try:
     data = json.load(sys.stdin)
-    if headless_claude():
+    cpid, tty, headless = claude_process()
+    if headless:
         sys.exit(0)
+    # one file per terminal session: iTerm2 has a stable session id; elsewhere use Claude's own session id
     iterm = os.environ.get("ITERM_SESSION_ID", "")  # e.g. "w0t1p0:6A1B2C3D-..."
-    if not iterm:
+    if iterm:
+        sid = iterm.split(":")[-1]
+    elif data.get("session_id"):
+        sid = "cc-" + data["session_id"]
+    else:
         sys.exit(0)
-    sid = iterm.split(":")[-1]
+    where = dict(terminal_info(), pid=cpid, tty=tty)
     os.makedirs(FOLDER, exist_ok=True)
     path = os.path.join(FOLDER, sid + ".json")
     event = data.get("hook_event_name", "")
@@ -233,7 +260,7 @@ try:
     if event == "Stop":
         text = last_assistant_text(data)
         stamp = time.time()
-        write(path, state=heuristic(text), cwd=cwd, event=event, ts=stamp, judged="heuristic", **session_info(data),
+        write(path, state=heuristic(text), cwd=cwd, event=event, ts=stamp, judged="heuristic", **session_info(data), **where,
               session=(data.get("session_id") or "")[:8])
         hc = hook_config()
         CLAUDE = claude_bin(hc) if hc.get("haiku") else None
@@ -269,7 +296,7 @@ try:
                 kind = "perm"
     write(path, state=state, kind=kind, cwd=cwd, event=event, ts=time.time(), tool=data.get("tool_name"),
           agent=data.get("agent_id") or data.get("agent_type"), session=(data.get("session_id") or "")[:8],
-          **session_info(data))
+          **session_info(data), **where)
 except Exception:
     pass
 sys.exit(0)

@@ -1,6 +1,6 @@
 // Session Status for Claude Code — Stream Deck plugin.
-// One key per iTerm2 session running Claude Code, coloured by what that session needs from you.
-// State comes from ~/.claude/session-status/<iTerm session id>.json, written by the bundled hook (src/hook.py, shipped inside bin/hook-src.js).
+// One key per Claude Code session (iTerm2, Terminal, Ghostty, Warp, WezTerm, kitty, VS Code…), coloured by what it needs from you.
+// State comes from ~/.claude/session-status/<iTerm session id | cc-<Claude session id>>.json, written by the bundled hook (src/hook.py, shipped inside bin/hook-src.js).
 "use strict";
 
 // Node 20 only exposes WebSocket behind a flag: relaunch ourselves with it.
@@ -60,7 +60,7 @@ function applyGlobal(g) {
 
 // ---------------------------------------------------------------- Stream Deck socket
 const keys = new Map();       // context -> slot (1-based)
-let sessions = [];            // sorted, filtered iTerm sessions
+let sessions = [];            // sorted, filtered sessions (iTerm2 tabs + Claude sessions in other terminals)
 const lastImage = new Map();
 let frame = 0, page = 0;
 
@@ -109,7 +109,10 @@ function onInspector(m) {
   }
 }
 
-// ---------------------------------------------------------------- iTerm2 via JXA (never launches iTerm)
+// ---------------------------------------------------------------- sessions
+// iTerm2 is listed via JXA (never launches it), so tabs show even before Claude starts and keep tab order.
+// Every other terminal is found from the hook's status files ("cc-<session id>.json"), which record the
+// terminal app, tty and claude pid; a file whose claude process is gone is cleaned up.
 const LIST_JS = `
 const app = Application("iTerm2");
 if (!app.running()) { "[]" } else {
@@ -122,32 +125,76 @@ if (!app.running()) { "[]" } else {
   JSON.stringify(out);
 }`;
 
-function listSessions() {
+let lastIterm = [];
+const HAS_ITERM = ["/Applications/iTerm.app", path.join(os.homedir(), "Applications/iTerm.app")].some((p) => fs.existsSync(p));
+function listIterm() {
+  if (!HAS_ITERM) return Promise.resolve([]);   // never ask macOS to find an app that is not installed
   return new Promise((resolve) => {
     execFile("/usr/bin/osascript", ["-l", "JavaScript", "-e", LIST_JS], { timeout: 4000 }, (err, stdout) => {
-      if (err) return resolve(null);
+      if (err) return resolve(lastIterm);
       try {
-        const list = JSON.parse(stdout.trim() || "[]");
+        const list = JSON.parse(stdout.trim() || "[]").map((o) => ({ ...o, iterm: true }));
         list.sort((a, b) => a.win - b.win || a.tab - b.tab || a.idx - b.idx);   // tab order
-        resolve(list);
-      } catch { resolve(null); }
+        resolve((lastIterm = list));
+      } catch { resolve(lastIterm); }
     });
   });
 }
 
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
+
+function listOther() {
+  const out = [];
+  let files = [];
+  try { files = fs.readdirSync(STATUS_DIR).filter((f) => f.startsWith("cc-") && f.endsWith(".json")); } catch {}
+  for (const f of files) {
+    const file = path.join(STATUS_DIR, f);
+    try {
+      const st = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!st.pid || !alive(st.pid)) {            // Claude exited without SessionEnd (closed window, crash)
+        if (Date.now() / 1000 - (st.ts || 0) > 10) fs.unlinkSync(file);
+        continue;
+      }
+      out.push({ id: f.slice(0, -5), name: "", focused: false, term: st.term, app: st.app, tty: st.tty, pane: st.pane, started: st.started || 0 });
+    } catch {}
+  }
+  return out.sort((a, b) => a.started - b.started);
+}
+
+async function listSessions() {
+  return [...(await listIterm()), ...listOther()];
+}
+
+const TERMINAL_JS = (tty) => `
+const app = Application("Terminal");
+let hit = false;
+app.windows().forEach(w => { if (hit) return; w.tabs().forEach(t => { if (!hit && t.tty() === ${JSON.stringify(tty)}) {
+  w.selectedTab = t; w.index = 1; hit = true; } }); });
+app.activate();`;
+// TERM_PROGRAM -> app to bring forward when the hook did not record a bundle id
+const TERM_APP = { Apple_Terminal: "Terminal", ghostty: "Ghostty", WarpTerminal: "Warp", WezTerm: "WezTerm",
+  kitty: "kitty", vscode: "Visual Studio Code", Hyper: "Hyper", Tabby: "Tabby", alacritty: "Alacritty" };
+
 function focus(s) {
-  const js = `
+  const run = (file, args) => execFile(file, args, { timeout: 4000 }, () => {});
+  if (s.iterm) {
+    return run("/usr/bin/osascript", ["-l", "JavaScript", "-e", `
 const app = Application("iTerm2");
 const w = app.windows().find(w => w.id() === ${Number(s.win)});
 if (w) {
   const t = w.tabs()[${Number(s.tab)}];
   w.select(); t.select(); t.sessions()[${Number(s.idx)}].select();
   app.activate();
-}`;
-  execFile("/usr/bin/osascript", ["-l", "JavaScript", "-e", js], { timeout: 4000 }, () => {});
+}`]);
+  }
+  if (s.term === "Apple_Terminal" && s.tty) return run("/usr/bin/osascript", ["-l", "JavaScript", "-e", TERMINAL_JS(s.tty)]);
+  if (s.term === "WezTerm" && s.pane) run("/Applications/WezTerm.app/Contents/MacOS/wezterm", ["cli", "activate-pane", "--pane-id", String(s.pane)]);
+  if (s.app) return run("/usr/bin/open", ["-b", s.app]);
+  if (TERM_APP[s.term]) run("/usr/bin/open", ["-a", TERM_APP[s.term]]);
 }
 
-const runsClaude = (s) => /\(claude\)\s*$/i.test(s.name);
+// iTerm titles the tab "<name> (claude)" while Claude runs; other terminals are only listed while claude is alive
+const runsClaude = (s) => !s.iterm || /\(claude\)\s*$/i.test(s.name);
 
 function readStatus(s) {
   try {
@@ -396,8 +443,7 @@ function render() {
 }
 
 async function tick() {
-  const list = await listSessions();
-  if (list) sessions = sortSessions(list);
+  sessions = sortSessions(await listSessions());
   render();
   setTimeout(tick, POLL_MS);
 }
