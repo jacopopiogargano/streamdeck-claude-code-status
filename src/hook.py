@@ -313,12 +313,12 @@ try:
         state = "waiting"  # permission prompt etc.
     if not state:
         sys.exit(0)
-    # Subagent tool events (agent_id set) must not flip the main session back to "working",
-    # e.g. a background agent while the main session waits on a question for the user.
+    # Subagent tool events (agent_id set) must not hide a question/permission the main session is
+    # waiting on; after Stop, a background agent still working does count as the session working.
     if state == "working" and data.get("agent_id"):
         try:
             with open(path) as f:
-                if json.load(f).get("state") != "working":
+                if json.load(f).get("state") == "waiting":   # done/idle + background agent = really working
                     sys.exit(0)
         except (OSError, ValueError):
             pass
