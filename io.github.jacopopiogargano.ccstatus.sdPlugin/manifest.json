@@ -1,6 +1,6 @@
 {
   "Name": "Session Status for Claude Code",
-  "Version": "1.2.2.0",
+  "Version": "1.2.3.0",
   "Author": "Jacopo Gargano",
   "Description": "One key per Claude Code session, in iTerm2, Terminal, Ghostty, Warp, WezTerm, kitty or VS Code, coloured by what it needs from you: a question, a permission prompt, finished work to check, or still working. Press a key to jump to that session.",
   "UUID": "io.github.jacopopiogargano.ccstatus",
