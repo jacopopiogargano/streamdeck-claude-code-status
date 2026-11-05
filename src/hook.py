@@ -313,6 +313,15 @@ try:
         state = "waiting"  # permission prompt etc.
     if not state:
         sys.exit(0)
+    # Subagent tool events (agent_id set) must not flip the main session back to "working",
+    # e.g. a background agent while the main session waits on a question for the user.
+    if state == "working" and data.get("agent_id"):
+        try:
+            with open(path) as f:
+                if json.load(f).get("state") != "working":
+                    sys.exit(0)
+        except (OSError, ValueError):
+            pass
     # waiting kind: "perm" = permission dialog (quick approve), "ask" = question/plan for the user
     kind = None
     if state == "waiting":
